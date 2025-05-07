@@ -1,0 +1,25 @@
+import numpy as np import pandas as pd from sklearn.model_selection import KFold, cross_val_score from sklearn.preprocessing import StandardScaler, LabelEncoder from sklearn.pipeline import make_pipeline from sklearn.linear_model import Lasso from sklearn.ensemble import GradientBoostingRegressor import xgboost as xgb import lightgbm as lgb
+1. Load the dataset
+data = pd.read_csv('house_prices.csv')  # Replace with your file
+2. Basic preprocessing
+Drop rows/columns with too many missing values
+data = data.dropna(axis=1, thresh=int(0.7 * len(data)))
+Fill missing numerical with median
+for col in data.select_dtypes(include=[np.number]).columns: data[col] = data[col].fillna(data[col].median())
+Fill missing categorical with mode
+for col in data.select_dtypes(include=["object"]).columns: data[col] = data[col].fillna(data[col].mode()[0])
+Encode categoricals
+for col in data.select_dtypes(include=['object']).columns: lbl = LabelEncoder() data[col] = lbl.fit_transform(data[col].astype(str))
+3. Feature / Target split
+X = data.drop(['SalePrice'], axis=1) y = data['SalePrice']
+4. Cross-validation strategy
+def rmsle_cv(model): kf = KFold(5, shuffle=True, random_state=42) rmse = -cross_val_score(model, X, y, scoring="neg_root_mean_squared_error", cv=kf) return rmse.mean()
+5. Models
+lasso = make_pipeline(StandardScaler(), Lasso(alpha=0.0005, random_state=1)) gbr = GradientBoostingRegressor(n_estimators=3000, learning_rate=0.05, max_depth=4, max_features='sqrt', min_samples_leaf=15, min_samples_split=10, loss='huber', random_state =5) xgboost = xgb.XGBRegressor(colsample_bytree=0.4603, gamma=0.0468, learning_rate=0.05, max_depth=3, min_child_weight=1.7817, n_estimators=2200, reg_alpha=0.4640, reg_lambda=0.8571, subsample=0.5213, random_state=7, nthread=-1) lightgbm = lgb.LGBMRegressor(objective='regression', num_leaves=5, learning_rate=0.05, n_estimators=720, max_bin=55, bagging_fraction=0.8, bagging_freq=5, feature_fraction=0.2319, feature_fraction_seed=9, bagging_seed=9, min_data_in_leaf=6, min_sum_hessian_in_leaf=11)
+6. Cross-validation scores
+print("Lasso score: {:.4f}".format(rmsle_cv(lasso))) print("GBR score: {:.4f}".format(rmsle_cv(gbr))) print("XGBoost score: {:.4f}".format(rmsle_cv(xgboost))) print("LightGBM score: {:.4f}".format(rmsle_cv(lightgbm)))
+7. Ensemble prediction
+lasso.fit(X, y) gbr.fit(X, y) xgboost.fit(X, y) lightgbm.fit(X, y)
+Final blended prediction
+final_pred = (0.2 * lasso.predict(X) + 0.2 * gbr.predict(X) + 0.3 * xgboost.predict(X) + 0.3 * lightgbm.predict(X))
+print("Final blended model RMSE: {:.4f}".format(np.sqrt(np.mean((final_pred - y) ** 2))))
